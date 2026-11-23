@@ -54,3 +54,29 @@ jobs:
         run: pip install -r requirements-dev.txt
       - name: Run tests
         run: pytest -q
+
+  eval-gate:
+    # Compares the newest committed eval run with the accepted baseline (named in
+    # evals/BASELINE). No LLM calls and no secrets: the evals are run locally and
+    # their result files are committed; this job only checks them.
+    name: Eval regression gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Install the gate from llm-eval-platform (pinned commit)
+        run: pip install "evalplat @ git+https://github.com/Arslan-Emin/llm-eval-platform@aa6e37bd4ecb7b2ecf2ba6fc20ea57d587ff8edd"
+      - name: Gate the newest eval run against the baseline
+        run: |
+          baseline="$(cat evals/BASELINE)"
+          # Result files are named <run time>_<model>.json, so the last name is the
+          # newest run, the same one `evalplat gate` picks from the folder.
+          newest="$(basename "$(ls evals/results/*.json | sort | tail -1)")"
+          if [ "$newest" = "$baseline" ]; then
+            echo "The newest eval run is the baseline itself ($baseline): nothing to compare."
+          else
+            evalplat gate "evals/results/$baseline" evals/results
+          fi
