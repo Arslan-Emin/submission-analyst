@@ -30,7 +30,8 @@ class Settings:
     jotform_api_key: str | None = None
     jotform_form_id: str | None = None
     jotform_base_url: str = DEFAULT_JOTFORM_BASE_URL
-    # Where submissions come from: "fixture" (synthetic, offline) or "jotform" (REST API).
+    # Where submissions come from: "fixture" (synthetic, offline), "jotform" (REST API)
+    # or "mcp" (Jotform's MCP server; needs `python -m analyst.sources.jotform_mcp login`).
     data_source: str = "fixture"
     trace_enabled: bool = True
     trace_dir: str = DEFAULT_TRACE_DIR

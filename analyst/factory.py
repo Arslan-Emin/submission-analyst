@@ -15,6 +15,7 @@ from analyst.llm_client import LLMClient, create_llm_client
 from analyst.normalize import normalize
 from analyst.sources.base import DataSource
 from analyst.sources.fixture import FixtureSource
+from analyst.sources.jotform_mcp import JotformMCPSource
 from analyst.sources.jotform_rest import JotformClient, JotformRESTSource
 from analyst.tracing import HttpExporter, JsonlFileSink, TracedLLMClient, TraceListener, Tracer
 
@@ -93,4 +94,10 @@ def create_source(settings: Settings | None = None) -> DataSource:
             raise RuntimeError("DATA_SOURCE=jotform needs JOTFORM_API_KEY and JOTFORM_FORM_ID.")
         client = JotformClient(settings.jotform_api_key, settings.jotform_base_url)
         return JotformRESTSource(client, settings.jotform_form_id)
-    raise RuntimeError(f"Unknown DATA_SOURCE {settings.data_source!r}. Use 'fixture' or 'jotform'.")
+    if settings.data_source == "mcp":
+        if not settings.jotform_form_id:
+            raise RuntimeError("DATA_SOURCE=mcp needs JOTFORM_FORM_ID (and a prior MCP login).")
+        return JotformMCPSource(settings.jotform_form_id)
+    raise RuntimeError(
+        f"Unknown DATA_SOURCE {settings.data_source!r}. Use 'fixture', 'jotform' or 'mcp'."
+    )

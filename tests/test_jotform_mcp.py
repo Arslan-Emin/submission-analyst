@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import json
-from types import SimpleNamespace
 from typing import Any
 
 import pytest
 from mcp.shared.auth import OAuthToken
+from mcp.types import CallToolResult, TextContent
 
 from analyst.normalize import normalize
 from analyst.sources.fixture import FixtureSource
@@ -19,6 +19,7 @@ from analyst.sources.jotform_mcp import (
     call_read_tool,
     load_from_session,
     questions_from_answers,
+    unwrap,
 )
 
 
@@ -30,7 +31,9 @@ class FakeSession:
         self.structured = structured
         self.calls: list[tuple[str, dict[str, Any]]] = []
 
-    async def call_tool(self, name: str, arguments: dict[str, Any] | None = None) -> Any:
+    async def call_tool(
+        self, name: str, arguments: dict[str, Any] | None = None, read_timeout_seconds=None
+    ) -> Any:
         self.calls.append((name, arguments or {}))
         if name == "fetch":
             payload: Any = {"id": arguments["id"], "title": "Survey"}
@@ -39,9 +42,8 @@ class FakeSession:
             page = self.submissions[f["offset"] : f["offset"] + f["limit"]]
             payload = {"total_count": len(self.submissions), "submissions": page}
         if self.structured:
-            return SimpleNamespace(isError=False, structuredContent=payload, content=[])
-        text = SimpleNamespace(text=json.dumps(payload))
-        return SimpleNamespace(isError=False, structuredContent=None, content=[text])
+            return CallToolResult(content=[], structured_content=payload)
+        return CallToolResult(content=[TextContent(type="text", text=json.dumps(payload))])
 
 
 FIXTURE = FixtureSource().load()
@@ -85,8 +87,10 @@ def test_only_read_tools_can_be_called(tool: str) -> None:
 
 def test_tool_errors_are_raised() -> None:
     class Failing:
-        async def call_tool(self, name, arguments=None):
-            return SimpleNamespace(isError=True, content=[SimpleNamespace(text="form not found")])
+        async def call_tool(self, name, arguments=None, read_timeout_seconds=None):
+            return CallToolResult(
+                is_error=True, content=[TextContent(type="text", text="form not found")]
+            )
 
     with pytest.raises(MCPError, match="form not found"):
         asyncio.run(call_read_tool(Failing(), "fetch", {"id": "x"}))
@@ -109,3 +113,45 @@ def test_source_uses_the_injected_session_runner() -> None:
     data = JotformMCPSource("f1", runner=runner).load()
 
     assert data.form_id == "f1" and len(data.submissions) == 5
+
+
+class LiveShapedSession(FakeSession):
+    """The envelopes the real server returned on 2026-11-23: get_submissions wraps
+    the page in {"is_success", "data"}, `answers` and `total_count` are strings, and
+    fetch returns the form as JSON text inside {"message": ...}."""
+
+    async def call_tool(
+        self, name: str, arguments: dict[str, Any] | None = None, read_timeout_seconds=None
+    ) -> Any:
+        self.calls.append((name, arguments or {}))
+        if name == "fetch":
+            form = {"id": arguments["id"], "title": "Customer Satisfaction"}
+            payload: Any = {"message": json.dumps(form)}
+        else:
+            f = arguments["filter"]
+            page = [
+                {**s, "answers": json.dumps(s["answers"])}
+                for s in self.submissions[f["offset"] : f["offset"] + f["limit"]]
+            ]
+            payload = {
+                "is_success": True,
+                "message": "Submissions listed successfully",
+                "error": "",
+                "data": {"submissions": page, "total_count": str(len(self.submissions))},
+            }
+        return CallToolResult(content=[], structured_content=payload)
+
+
+def test_live_envelopes_are_unwrapped_into_the_rest_shape() -> None:
+    data = asyncio.run(load_from_session(LiveShapedSession(FIXTURE.submissions[:150]), "f1"))
+
+    assert data.form_title == "Customer Satisfaction"
+    assert len(data.submissions) == 150
+    assert data.submissions[0]["answers"] == FIXTURE.submissions[0]["answers"]
+    expected = normalize(type(FIXTURE)("f1", "x", FIXTURE.questions, FIXTURE.submissions[:150]))
+    assert [t.rows for t in normalize(data)] == [t.rows for t in expected]
+
+
+def test_unsuccessful_envelope_is_an_error() -> None:
+    with pytest.raises(MCPError, match="form not found"):
+        unwrap("get_submissions", {"is_success": False, "error": "form not found", "data": None})

@@ -14,6 +14,15 @@ Least privilege, twice:
 
 Tokens are stored in .mcp_tokens/ (git-ignored) and never printed.
 
+Seen on live calls (2026-11-23), none of it in the docs:
+- get_submissions wraps its page in {"is_success", "message", "error", "data"};
+  `answers` comes as JSON text and `total_count` as a string. `fetch` returns the
+  form as JSON text in {"message": ...}. `unwrap` turns both into the REST shapes,
+  and the same 20 live submissions normalize to identical tables either way.
+- Each tool call took 60-130 s (REST: about 1 s), so loading 20 submissions took
+  about 3 minutes. The REST source is the practical choice; this one shows the
+  integration works.
+
     python -m analyst.sources.jotform_mcp login    # one-time browser consent
     python -m analyst.sources.jotform_mcp tools    # list the server's tools
 """
@@ -41,6 +50,7 @@ from mcp.shared.auth import (
     OAuthClientMetadata,
     OAuthToken,
 )
+from mcp.types import CallToolResult, TextContent
 
 from analyst.sources.base import SourceData
 
@@ -52,6 +62,8 @@ TOKEN_FILE = Path(__file__).resolve().parents[2] / ".mcp_tokens" / "jotform.json
 # Tools this client may call. Everything else on the server writes or sends something.
 READ_TOOLS = {"get_submissions", "fetch", "search"}
 PAGE_SIZE = 100
+# Live calls took 60-130 s each (2026-11-23), far above typical HTTP timeouts.
+CALL_TIMEOUT_S = 300
 
 
 class MCPError(RuntimeError):
@@ -160,7 +172,12 @@ def make_auth(storage: TokenStorage, *, interactive: bool) -> OAuthClientProvide
 
 
 class ToolSession(Protocol):
-    async def call_tool(self, name: str, arguments: dict[str, Any] | None = None) -> Any: ...
+    async def call_tool(
+        self,
+        name: str,
+        arguments: dict[str, Any] | None = None,
+        read_timeout_seconds: float | None = None,
+    ) -> CallToolResult: ...
 
 
 async def call_read_tool(session: ToolSession, name: str, arguments: dict[str, Any]) -> Any:
@@ -169,10 +186,10 @@ async def call_read_tool(session: ToolSession, name: str, arguments: dict[str, A
         raise MCPError(
             f"Tool {name!r} is not allowed: this client only reads ({sorted(READ_TOOLS)})."
         )
-    result = await session.call_tool(name, arguments)
-    if getattr(result, "isError", False):
+    result = await session.call_tool(name, arguments, read_timeout_seconds=CALL_TIMEOUT_S)
+    if result.is_error:
         raise MCPError(f"{name} failed: {_text(result)[:300]}")
-    structured = getattr(result, "structuredContent", None)
+    structured = result.structured_content
     if structured is not None:
         return structured
     text = _text(result)
@@ -182,8 +199,8 @@ async def call_read_tool(session: ToolSession, name: str, arguments: dict[str, A
         raise MCPError(f"{name} returned non-JSON content.") from error
 
 
-def _text(result: Any) -> str:
-    return "".join(getattr(part, "text", "") for part in getattr(result, "content", []) or [])
+def _text(result: CallToolResult) -> str:
+    return "".join(part.text for part in result.content if isinstance(part, TextContent))
 
 
 def questions_from_answers(submissions: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
@@ -197,16 +214,48 @@ def questions_from_answers(submissions: list[dict[str, Any]]) -> dict[str, dict[
     return questions
 
 
+def _maybe_json(value: Any) -> Any:
+    """The server sends some objects as JSON text inside the JSON result."""
+    if isinstance(value, str) and value[:1] in "{[":
+        try:
+            return json.loads(value)
+        except json.JSONDecodeError:
+            return value
+    return value
+
+
+def unwrap(name: str, payload: Any) -> Any:
+    """Undo the server's envelopes, as seen on live calls (2026-11-23; not documented):
+    - get_submissions: {"is_success", "message", "error", "data": {...}}
+    - fetch: {"message": "<JSON text of the form>"}
+    """
+    if isinstance(payload, dict) and "is_success" in payload:
+        if not payload["is_success"]:
+            raise MCPError(f"{name} failed: {payload.get('error') or payload.get('message')}")
+        payload = payload.get("data")
+    if isinstance(payload, dict) and set(payload) == {"message"}:
+        payload = _maybe_json(payload["message"])
+    return payload
+
+
+def _normalize_submission(submission: dict[str, Any]) -> dict[str, Any]:
+    # `answers` arrives as JSON text over MCP (a dict over REST).
+    return {**submission, "answers": _maybe_json(submission.get("answers")) or {}}
+
+
 async def load_from_session(session: ToolSession, form_id: str) -> SourceData:
-    form = await call_read_tool(session, "fetch", {"id": form_id})
+    form = unwrap("fetch", await call_read_tool(session, "fetch", {"id": form_id}))
     submissions: list[dict[str, Any]] = []
     while True:
-        page = await call_read_tool(
-            session,
+        page = unwrap(
             "get_submissions",
-            {"form_id": form_id, "filter": {"limit": PAGE_SIZE, "offset": len(submissions)}},
+            await call_read_tool(
+                session,
+                "get_submissions",
+                {"form_id": form_id, "filter": {"limit": PAGE_SIZE, "offset": len(submissions)}},
+            ),
         )
-        batch = page.get("submissions") or []
+        batch = [_normalize_submission(s) for s in page.get("submissions") or []]
         submissions.extend(batch)
         if not batch or len(submissions) >= int(page.get("total_count") or 0):
             break
