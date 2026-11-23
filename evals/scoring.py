@@ -6,7 +6,9 @@ The SQL text is never compared (many queries are correct); the results are:
   answered with both the count and the percentage is still correct.)
 - Row order matters only when the case says so (the question asks for a ranking
   or "latest"); otherwise rows are compared as a multiset.
-- The number of rows must be equal.
+- The number of rows must be equal, except for "which X is the most ..." cases
+  (`top_k`): then the first k predicted rows must match the k gold rows, so a
+  query that returns the whole ranking with the right item on top also passes.
 - Numbers match when they are equal within 1e-6, or equal after rounding to two
   decimals (the precision the prompt asks for). Decimal and int compare as numbers.
 - A datetime at midnight equals the same date; NULL equals NULL; text is exact.
@@ -72,8 +74,16 @@ def _rows_match(predicted: list[Row], gold: list[Row], ordered: bool) -> bool:
 
 
 def results_match(
-    predicted_rows: list[Row], gold_rows: list[Row], *, ordered: bool = False
+    predicted_rows: list[Row],
+    gold_rows: list[Row],
+    *,
+    ordered: bool = False,
+    top_k: int | None = None,
 ) -> bool:
+    if top_k is not None:
+        return len(gold_rows) == top_k and results_match(
+            predicted_rows[:top_k], gold_rows, ordered=True
+        )
     if not gold_rows:
         return not predicted_rows
     if not predicted_rows or len(predicted_rows) != len(gold_rows):

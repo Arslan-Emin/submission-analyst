@@ -70,9 +70,16 @@ def score(
         checks.append(
             _check(
                 "execution",
-                "result matches gold" + (" (ordered)" if case.get("ordered") else ""),
+                "result matches gold"
+                + (" (ordered)" if case.get("ordered") else "")
+                + (f" (top {case['top_k']})" if case.get("top_k") else ""),
                 result.action == "query"
-                and results_match(result.rows, gold, ordered=bool(case.get("ordered"))),
+                and results_match(
+                    result.rows,
+                    gold,
+                    ordered=bool(case.get("ordered")),
+                    top_k=case.get("top_k"),
+                ),
             )
         )
     else:

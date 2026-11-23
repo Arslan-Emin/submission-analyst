@@ -71,3 +71,14 @@ def test_empty_results() -> None:
 def test_single_value_answer() -> None:
     assert results_match([(Decimal("59.05"),)], [(59.047619,)]) is True
     assert results_match([(105, 62, Decimal("59.05"))], [(59.05,)]) is True
+
+
+def test_top_k_checks_only_the_first_rows_of_a_ranking() -> None:
+    ranking = [("Form Builder", 107), ("Reports", 106), ("PDF Editor", 99)]
+
+    assert results_match(ranking, [("Form Builder",)], top_k=1) is True
+    assert results_match(ranking[1:], [("Form Builder",)], top_k=1) is False
+    assert results_match([], [("Form Builder",)], top_k=1) is False
+    # No issue on top is still wrong, even if the right topic is second.
+    topics = [("No issue", 58), ("Performance", 31)]
+    assert results_match(topics, [("Performance",)], top_k=1) is False
