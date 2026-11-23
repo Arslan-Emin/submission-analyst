@@ -1,5 +1,6 @@
 # Copied from conversational-form-agent (commit 6e67866), app/tracing.py.
-# Changes: imports point to the analyst package. Event schema unchanged (evalplat reads it).
+# Changes: imports point to the analyst package; TracedLLMClient forwards `response_format` and
+# `max_tokens` and adds a `json_mode` field to llm_call events. Event schema otherwise unchanged.
 """Tracing: structured events for every LLM call, tool call and agent turn.
 
 This is the hook the companion eval & observability platform (project 2) plugs
@@ -273,10 +274,18 @@ class TracedLLMClient:
         *,
         system: str | None = None,
         tools: list[ToolSpec] | None = None,
+        response_format: dict[str, Any] | None = None,
+        max_tokens: int | None = None,
     ) -> LLMResponse:
         started = time.perf_counter()
         try:
-            response = self._inner.chat(history, system=system, tools=tools)
+            response = self._inner.chat(
+                history,
+                system=system,
+                tools=tools,
+                response_format=response_format,
+                max_tokens=max_tokens,
+            )
         except Exception as error:
             self._tracer.emit(
                 "llm_call",
@@ -305,6 +314,7 @@ class TracedLLMClient:
             "history_items": len(history),
             "tools_offered": [tool.name for tool in tools or []],
             "tool_calls": [call.name for call in response.tool_calls],
+            "json_mode": bool(response_format),
         }
         if self._tracer.include_content:
             fields["output_text"] = response.text

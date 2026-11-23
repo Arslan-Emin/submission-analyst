@@ -178,3 +178,20 @@ def test_factory_builds_deepseek_client() -> None:
 def test_factory_fails_fast_on_bad_config(settings: Settings, error: str) -> None:
     with pytest.raises(RuntimeError, match=error):
         create_llm_client(settings)
+
+
+def test_chat_sends_json_mode_and_max_tokens_only_when_asked() -> None:
+    message = ChatCompletionMessage.model_construct(role="assistant", content='{"sql": "SELECT 1"}')
+    sdk = fake_chat_sdk(message)
+    client = ChatCompletionsClient(model="deepseek-test", sdk_client=sdk)
+
+    client.chat([client.user_message("hi")])
+    plain = sdk.chat.completions.last_request
+    client.chat(
+        [client.user_message("hi")], response_format={"type": "json_object"}, max_tokens=800
+    )
+    json_mode = sdk.chat.completions.last_request
+
+    assert "response_format" not in plain and "max_tokens" not in plain
+    assert json_mode["response_format"] == {"type": "json_object"}
+    assert json_mode["max_tokens"] == 800

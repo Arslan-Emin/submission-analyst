@@ -58,8 +58,18 @@ class ScriptedLLM:
         *,
         system: str | None = None,
         tools: list[ToolSpec] | None = None,
+        response_format: dict[str, Any] | None = None,
+        max_tokens: int | None = None,
     ) -> LLMResponse:
-        self.requests.append({"history": list(history), "system": system, "tools": tools})
+        self.requests.append(
+            {
+                "history": list(history),
+                "system": system,
+                "tools": tools,
+                "response_format": response_format,
+                "max_tokens": max_tokens,
+            }
+        )
         response = self._responses.pop(0)
         if isinstance(response, Exception):
             raise response

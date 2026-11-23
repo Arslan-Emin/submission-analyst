@@ -1,6 +1,7 @@
 # Copied from conversational-form-agent (commit 6e67866), app/llm_client.py.
 # Changes: imports point to analyst.config; the OpenAI Responses API client was dropped
-# (this project only uses DeepSeek through the Chat Completions API).
+# (this project only uses DeepSeek through the Chat Completions API); chat() gained optional
+# `response_format` (JSON mode) and `max_tokens`.
 """Thin, provider-agnostic wrapper around LLM APIs.
 
 Every LLM call in the project goes through this module. That gives us one place
@@ -86,6 +87,8 @@ class LLMClient(Protocol):
         *,
         system: str | None = None,
         tools: list[ToolSpec] | None = None,
+        response_format: dict[str, Any] | None = None,
+        max_tokens: int | None = None,
     ) -> LLMResponse: ...
 
 
@@ -127,6 +130,8 @@ class ChatCompletionsClient:
         *,
         system: str | None = None,
         tools: list[ToolSpec] | None = None,
+        response_format: dict[str, Any] | None = None,
+        max_tokens: int | None = None,
     ) -> LLMResponse:
         # The system prompt is added per request, not stored in history, so it
         # can change (e.g. today's date) without rewriting the conversation.
@@ -134,6 +139,11 @@ class ChatCompletionsClient:
         request: dict[str, Any] = {"model": self.model, "messages": messages}
         if tools:
             request["tools"] = [_to_chat_tool(tool) for tool in tools]
+        # JSON mode, e.g. {"type": "json_object"}: the reply is a JSON object.
+        if response_format:
+            request["response_format"] = response_format
+        if max_tokens:
+            request["max_tokens"] = max_tokens
         if self._extra_body:
             request["extra_body"] = self._extra_body
 

@@ -168,3 +168,15 @@ def test_summary_of_events() -> None:
     assert summary["calls_without_price"] == 1
     assert summary["llm_latency_ms"]["p50"] == 800
     assert summary["tools"] == {"update_fields": {"calls": 1, "failed": 1}}
+
+
+def test_traced_client_forwards_json_mode_and_marks_the_event() -> None:
+    inner = ScriptedLLM([text_reply("{}")])
+    sink = InMemorySink()
+    llm = TracedLLMClient(inner, Tracer([sink]), provider="fake")
+
+    llm.chat([llm.user_message("hi")], response_format={"type": "json_object"}, max_tokens=50)
+
+    assert inner.requests[0]["response_format"] == {"type": "json_object"}
+    assert inner.requests[0]["max_tokens"] == 50
+    assert sink.events[0]["json_mode"] is True
