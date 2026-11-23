@@ -72,6 +72,12 @@ class JotformClient:
             raise JotformError("Unexpected form format from Jotform.")
         return content
 
+    def get_submission(self, submission_id: str) -> dict[str, Any]:
+        content = self._request("GET", f"/submission/{submission_id}")
+        if not isinstance(content, dict):
+            raise JotformError("Unexpected submission format from Jotform.")
+        return content
+
     def get_questions(self, form_id: str) -> dict[str, dict[str, Any]]:
         content = self._request("GET", f"/form/{form_id}/questions")
         if not isinstance(content, dict):
