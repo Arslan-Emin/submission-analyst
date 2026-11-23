@@ -236,7 +236,7 @@ class Analyst:
         started = time.perf_counter()
         attempt = SQLAttempt(sql=sql, ok=False)
         try:
-            guarded = check_sql(sql, self.table_names, max_rows=self.max_rows)
+            guarded = check_sql(sql, self.table_names, max_rows=self.max_rows, today=self.today())
             attempt.ran_sql = guarded.sql
             query = run_query(self.connection, guarded.sql, timeout_s=self.timeout_s)
         except (SQLGuardError, QueryTimeout, duckdb.Error) as error:

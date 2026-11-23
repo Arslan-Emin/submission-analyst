@@ -204,3 +204,13 @@ def test_parse_plan_rejects_bad_replies(text: str, problem: str) -> None:
 def test_chart_suggestion_is_validated_against_result_columns(chart, expected) -> None:
     spec = chart_for(chart, ["week", "avg"])
     assert (spec and (spec.type, spec.x, spec.y)) == expected
+
+
+def test_generated_sql_uses_the_analyst_clock_not_the_system_clock(database) -> None:
+    sql = "SELECT CURRENT_DATE AS today"
+    analyst, _, _ = make(database, [plan(sql=sql, chart={"type": "none"}), "ok"])
+
+    result = analyst.ask("What day is it?")
+
+    assert str(result.rows[0][0]) == "2026-11-23"
+    assert "CAST('2026-11-23' AS DATE)" in result.sql

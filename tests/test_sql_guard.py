@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 import pytest
 
 from analyst.database import build_database, open_read_only, run_query
@@ -112,3 +114,43 @@ def test_rewritten_sql_runs_and_returns_the_same_rows(fixture_db, sql: str) -> N
     original = run_query(fixture_db, sql).rows
     rewritten = run_query(fixture_db, guard(sql).sql).rows
     assert sorted(map(repr, rewritten)) == sorted(map(repr, original[:1000]))
+
+
+TODAY = datetime(2026, 11, 23, 12, 0)
+
+
+@pytest.mark.parametrize(
+    ("sql", "literal"),
+    [
+        ("SELECT CURRENT_DATE", "CAST('2026-11-23' AS DATE)"),
+        ("SELECT today()", "CAST('2026-11-23' AS DATE)"),
+        ("SELECT now()", "CAST('2026-11-23 12:00:00' AS TIMESTAMP)"),
+        ("SELECT CURRENT_TIMESTAMP", "CAST('2026-11-23 12:00:00' AS TIMESTAMP)"),
+        ("SELECT get_current_timestamp()", "CAST('2026-11-23 12:00:00' AS TIMESTAMP)"),
+        ("SELECT CURRENT_TIME", "CAST('12:00:00' AS TIME)"),
+    ],
+)
+def test_system_clock_is_replaced_by_today(sql: str, literal: str) -> None:
+    result = check_sql(sql, TABLES, today=TODAY)
+
+    assert literal in result.sql
+    assert result.clock_pinned is True
+
+
+def test_clock_is_left_alone_without_today() -> None:
+    result = guard("SELECT CURRENT_DATE")
+    assert "CURRENT_DATE" in result.sql and result.clock_pinned is False
+
+
+def test_last_month_uses_the_pinned_today_not_the_real_date(fixture_db) -> None:
+    # The query a model wrote in a real eval run. Pinned to a day in December, "last
+    # month" must be November whatever the machine's clock says.
+    sql = (
+        "SELECT min(created_at) AS first, max(created_at) AS last FROM submissions "
+        "WHERE created_at >= DATE_TRUNC('month', CURRENT_DATE - INTERVAL 1 MONTH) "
+        "AND created_at < DATE_TRUNC('month', CURRENT_DATE)"
+    )
+    pinned = check_sql(sql, TABLES, today=datetime(2026, 12, 10, 9, 0))
+
+    first, last = run_query(fixture_db, pinned.sql).rows[0]
+    assert (first.month, last.month) == (11, 11)
