@@ -8,3 +8,4 @@ duckdb==2.0.1
 sqlglot==30.33.0
 streamlit==1.67.0
 altair==6.3.0
+mcp==2.3.0
