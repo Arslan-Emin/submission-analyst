@@ -5,6 +5,7 @@ streamlit run streamlit_app.py
 
 from __future__ import annotations
 
+import os
 import tempfile
 from pathlib import Path
 
@@ -12,6 +13,7 @@ import streamlit as st
 
 from analyst import factory
 from analyst.agent import Analyst, AnalystResult
+from analyst.budget import DailyBudget
 from analyst.charts import build_chart, result_frame
 from analyst.config import get_settings
 
@@ -25,11 +27,49 @@ EXAMPLE_QUESTIONS = [
 st.set_page_config(page_title="Submission Analyst", page_icon=":material/query_stats:")
 
 
+def load_secrets_into_env() -> None:
+    """Streamlit Community Cloud provides secrets via st.secrets; the app reads
+    settings from environment variables (analyst/config.py). Copy top-level secrets
+    over, without overriding variables that are already set (e.g. from .env)."""
+    try:
+        secrets = dict(st.secrets)
+    except Exception:  # noqa: BLE001 - no secrets file locally is normal
+        return
+    for key, value in secrets.items():
+        if isinstance(value, str | int | float | bool) and key not in os.environ:
+            os.environ[key] = str(value)
+
+
+load_secrets_into_env()
+
+
+@st.cache_resource
+def get_budget() -> DailyBudget | None:
+    limit = get_settings().daily_budget_usd
+    return DailyBudget(limit) if limit else None
+
+
+def demo_limit_message() -> str | None:
+    """Why the demo can't take another question right now, or None if it can."""
+    budget = get_budget()
+    if budget is not None and budget.exhausted:
+        return (
+            "The demo has reached its daily usage limit. Please come back tomorrow, "
+            "or run it locally (see the README)."
+        )
+    limit = get_settings().demo_max_questions
+    if limit is not None and st.session_state.get("questions_asked", 0) >= limit:
+        return f"This demo allows {limit} questions per session. Reload the page to start over."
+    return None
+
+
 @st.cache_resource(show_spinner="Loading the survey data...")
 def get_analyst() -> Analyst:
     """One analyst per server process: the database is built once and opened read-only."""
     settings = get_settings()
     tracer = factory.create_tracer(settings)
+    if (budget := get_budget()) is not None:
+        tracer.add_listener(budget)  # every llm_call's cost counts towards today's total
     llm = factory.create_traced_llm(settings, tracer)
     folder = Path(tempfile.mkdtemp(prefix="submission-analyst-"))
     source = factory.create_source(settings)
@@ -117,6 +157,11 @@ def main() -> None:
     if question:
         with st.chat_message("user"):
             st.markdown(_markdown_text(question))
+        if (limit_message := demo_limit_message()) is not None:
+            st.warning(limit_message)
+            return
+        # Counted before the call, so a failing question still uses up the allowance.
+        st.session_state.questions_asked = st.session_state.get("questions_asked", 0) + 1
         try:
             with st.spinner("Writing and running SQL..."):
                 result = analyst.ask(question)

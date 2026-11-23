@@ -11,7 +11,8 @@ import streamlit as st
 from streamlit.testing.v1 import AppTest
 
 from analyst import factory
-from analyst.tracing import Tracer
+from analyst.pricing import PRICES, ModelPrice
+from analyst.tracing import TracedLLMClient, Tracer
 from tests.fakes import ScriptedLLM, text_reply
 
 APP = Path(__file__).resolve().parent.parent / "streamlit_app.py"
@@ -70,3 +71,35 @@ def test_missing_api_key_shows_an_error(monkeypatch) -> None:
     at = AppTest.from_file(str(APP), default_timeout=30).run()
 
     assert at.error[0].value == "DEEPSEEK_API_KEY is not set."
+
+
+def test_question_limit_stops_before_calling_the_llm(fake_llm, monkeypatch) -> None:
+    monkeypatch.setenv("DEMO_MAX_QUESTIONS", "1")
+    at = AppTest.from_file(str(APP), default_timeout=30).run()
+    at.chat_input[0].set_value("How many per device?").run()
+    calls_after_first = len(fake_llm.requests)
+
+    at.chat_input[0].set_value("And per city?").run()
+
+    assert calls_after_first == 2
+    assert len(fake_llm.requests) == 2  # the second question never reached the LLM
+    assert "1 questions per session" in at.warning[0].value
+
+
+def test_exhausted_daily_budget_blocks_questions(fake_llm, monkeypatch) -> None:
+    # The fake model needs a price, or its calls cost nothing.
+    monkeypatch.setitem(PRICES, "fake", ModelPrice(input=1.0, cached_input=1.0, output=1.0))
+    monkeypatch.setenv("DAILY_BUDGET_USD", "0.00001")  # less than one question
+    # As in the app, the LLM is wrapped with tracing: its llm_call events feed the budget.
+    monkeypatch.setattr(
+        factory,
+        "create_traced_llm",
+        lambda settings, tracer: TracedLLMClient(fake_llm, tracer, "fake"),
+    )
+    at = AppTest.from_file(str(APP), default_timeout=30).run()
+    at.chat_input[0].set_value("How many per device?").run()
+
+    at.chat_input[0].set_value("And per city?").run()
+
+    assert len(fake_llm.requests) == 2  # only the first question's two calls
+    assert "daily usage limit" in at.warning[0].value

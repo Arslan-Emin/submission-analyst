@@ -19,6 +19,8 @@ ENV_NAMES = [
     "TRACE_INCLUDE_CONTENT",
     "TRACE_HTTP_URL",
     "TRACE_HTTP_TOKEN",
+    "DEMO_MAX_QUESTIONS",
+    "DAILY_BUDGET_USD",
 ]
 
 
@@ -55,3 +57,12 @@ def test_environment_values_are_read(clean_env: pytest.MonkeyPatch) -> None:
     assert settings.trace_enabled is False
     assert settings.jotform_configured is True
     assert settings.trace_http_url is None
+
+
+def test_demo_limits_are_off_unless_configured(clean_env: pytest.MonkeyPatch) -> None:
+    assert (get_settings().demo_max_questions, get_settings().daily_budget_usd) == (None, None)
+
+    clean_env.setenv("DEMO_MAX_QUESTIONS", "10")
+    clean_env.setenv("DAILY_BUDGET_USD", "0.5")
+
+    assert (get_settings().demo_max_questions, get_settings().daily_budget_usd) == (10, 0.5)
