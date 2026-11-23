@@ -10,7 +10,12 @@ import pytest
 
 from analyst.database import build_database, open_read_only
 from analyst.normalize import Column, Table, normalize
-from analyst.prompts import build_answer_message, build_schema_context, build_sql_system_prompt
+from analyst.prompts import (
+    build_answer_message,
+    build_schema_context,
+    build_sql_system_prompt,
+    is_none_answer,
+)
 from analyst.sources.fixture import FixtureSource
 from scripts.seed import INJECTION_COMMENTS
 
@@ -87,3 +92,31 @@ def test_answer_message_caps_rows_and_wraps_them_as_data() -> None:
     assert payload["rows_shown"] == 50
     assert len(payload["rows"]) == 50
     assert "Assumptions: (none)" in message
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("No issue", True),
+        ("None", True),
+        ("N/A", True),
+        ("NA", True),
+        ("Nothing to report", True),
+        ("no problems", True),
+        ("Not satisfied", False),
+        ("Notifications", False),
+        ("Nordic", False),
+        ("Performance", False),
+        ("Nancy", False),
+    ],
+)
+def test_none_answers_are_recognized(value: str, expected: bool) -> None:
+    assert is_none_answer(value) is expected
+
+
+def test_none_answer_gets_a_note_only_on_its_column(fixture_context: str) -> None:
+    topic_line = next(line for line in fixture_context.splitlines() if "complaint_topic" in line)
+    device_line = next(line for line in fixture_context.splitlines() if " device " in line)
+
+    assert "Note: 'No issue' means the respondent had nothing to report" in topic_line
+    assert "Note:" not in device_line

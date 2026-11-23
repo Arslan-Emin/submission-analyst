@@ -13,6 +13,7 @@ write the SQL.
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime
 from typing import Any
 
@@ -25,6 +26,18 @@ from analyst.normalize import Table
 MAX_CATEGORY_VALUES = 25
 FREE_TEXT_TYPES = {"control_textarea"}
 ANSWER_MAX_ROWS = 50
+
+
+# Answer options that say "nothing happened" ('No issue', 'None', 'N/A', ...). Counted
+# as a category they top every "most common complaint" ranking, a mistake the first
+# eval runs showed. "^no\b" matches 'No issue' but not 'Not satisfied'.
+_NONE_ANSWER = re.compile(
+    r"^(no\b|none\b|nothing\b|n/?a$|not applicable\b|nobody\b)", re.IGNORECASE
+)
+
+
+def is_none_answer(value: str) -> bool:
+    return bool(_NONE_ANSWER.match(value.strip()))
 
 
 def _q(identifier: str) -> str:
@@ -73,6 +86,13 @@ def _describe(connection, table: Table, column, total: int) -> str:
             ).rows
             listed = ", ".join(_sql_literal(v[0]) for v in values)
             parts.append(f"Categorical; exact values: {listed}.")
+            if none_values := [v[0] for v in values if is_none_answer(str(v[0]))]:
+                quoted = ", ".join(_sql_literal(v) for v in none_values)
+                parts.append(
+                    f"Note: {quoted} means the respondent had nothing to report here; "
+                    "leave it out when counting, ranking or finding the most common "
+                    "issues, complaints or problems."
+                )
         else:
             parts.append(
                 f"Free text ({distinct} distinct values; not shown). Search it with ILIKE."
