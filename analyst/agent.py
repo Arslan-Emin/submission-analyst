@@ -168,6 +168,10 @@ class Analyst:
 
     # ------------------------------------------------------------------ public
 
+    def today(self) -> datetime:
+        """The date relative questions ("last month") are answered against."""
+        return self._clock()
+
     def ask(self, question: str, *, conversation_id: str | None = None) -> AnalystResult:
         result = AnalystResult(
             question=question, conversation_id=conversation_id or uuid.uuid4().hex
@@ -192,7 +196,7 @@ class Analyst:
     # ------------------------------------------------------------------ steps
 
     def _run(self, result: AnalystResult) -> None:
-        system = build_sql_system_prompt(self.schema_context, self._clock())
+        system = build_sql_system_prompt(self.schema_context, self.today())
         history: list[HistoryItem] = [self.llm.user_message(result.question)]
         plan: Plan | None = None
 
