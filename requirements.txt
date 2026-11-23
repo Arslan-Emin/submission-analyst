@@ -5,3 +5,4 @@ python-dotenv==1.2.4
 tzdata==2026.6
 httpx==0.28.1
 duckdb==2.0.1
+sqlglot==30.33.0
