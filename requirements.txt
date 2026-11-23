@@ -6,3 +6,5 @@ tzdata==2026.6
 httpx==0.28.1
 duckdb==2.0.1
 sqlglot==30.33.0
+streamlit==1.67.0
+altair==6.3.0
