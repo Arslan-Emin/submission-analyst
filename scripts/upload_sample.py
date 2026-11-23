@@ -31,17 +31,29 @@ SKIPPED_TYPES = {"control_head", "control_button", "control_text", "control_divi
 def match_questions(
     fixture_questions: dict[str, dict[str, Any]], live_questions: dict[str, dict[str, Any]]
 ) -> dict[str, str]:
-    """fixture qid -> live qid, by unique name. Raises if the live form lacks a question."""
+    """fixture qid -> live qid, by unique name, else by question text (case-insensitive).
+
+    Matching by text means the form can be built in the Jotform editor without
+    setting unique names. Raises if the live form lacks a question.
+    """
     live_by_name = {str(q.get("name")): qid for qid, q in live_questions.items()}
+    live_by_text = {
+        str(q.get("text", "")).strip().casefold(): qid
+        for qid, q in live_questions.items()
+        if q.get("type") not in SKIPPED_TYPES
+    }
     mapping, missing = {}, []
     for qid, question in fixture_questions.items():
         if question["type"] in SKIPPED_TYPES:
             continue
         name = str(question["name"])
+        text = str(question["text"]).strip().casefold()
         if name in live_by_name:
             mapping[qid] = live_by_name[name]
+        elif text in live_by_text:
+            mapping[qid] = live_by_text[text]
         else:
-            missing.append(name)
+            missing.append(f"{name} ({question['text']!r})")
     if missing:
         raise ValueError(f"The live form has no question named: {', '.join(missing)}")
     return mapping

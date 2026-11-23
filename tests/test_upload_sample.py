@@ -59,3 +59,16 @@ def test_sample_is_spread_over_the_fixture() -> None:
     assert len(sample) == 20
     months = {s["created_at"][:7] for s in sample}
     assert months == {"2026-08", "2026-09", "2026-10", "2026-11"}
+
+
+def test_questions_without_unique_names_are_matched_by_text() -> None:
+    fixture = FixtureSource().load().questions
+    # Names as the Jotform editor generates them; texts typed by hand, other case.
+    live = {
+        str(50 + i): {"name": f"typeA{i}", "type": q["type"], "text": q["text"].upper()}
+        for i, q in enumerate(fixture.values())
+    }
+
+    mapping = match_questions(fixture, live)
+
+    assert mapping["5"] == str(50 + list(fixture).index("5"))
