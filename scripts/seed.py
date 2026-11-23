@@ -29,6 +29,7 @@ SEED = 20261123
 SUBMISSION_COUNT = 400
 START = datetime(2026, 8, 1)
 END = datetime(2026, 11, 23)  # exclusive
+AS_OF = datetime(2026, 11, 23, 12, 0)  # "today" for questions about this snapshot
 FORM_ID = "260000000000001"
 FORM_TITLE = "Customer Satisfaction Survey"
 OUTPUT = Path(__file__).resolve().parent.parent / "data" / "fixture_submissions.json"
@@ -312,7 +313,7 @@ def generate(seed: int = SEED) -> dict[str, Any]:
     rng = random.Random(seed)
     questions = build_questions()
     return {
-        "form": {"id": FORM_ID, "title": FORM_TITLE},
+        "form": {"id": FORM_ID, "title": FORM_TITLE, "as_of": AS_OF.isoformat()},
         "questions": questions,
         "submissions": build_submissions(questions, rng),
     }

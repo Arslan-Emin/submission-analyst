@@ -12,11 +12,8 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 
-from analyst.agent import Analyst
 from analyst.config import get_settings
-from analyst.database import build_database, open_read_only
-from analyst.factory import create_traced_llm, create_tracer
-from analyst.normalize import normalize
+from analyst.factory import create_analyst, create_traced_llm, create_tracer
 from analyst.sources.fixture import FixtureSource
 
 MAX_PRINTED_ROWS = 20
@@ -33,20 +30,15 @@ def main(argv: list[str] | None = None) -> int:
     llm = create_traced_llm(settings, tracer)
     today = datetime.strptime(args.today, "%Y-%m-%d").replace(hour=12) if args.today else None
 
-    tables = normalize(FixtureSource().load())
+    clock = (lambda: today) if today else None
     with tempfile.TemporaryDirectory() as folder:
-        connection = open_read_only(build_database(tables, Path(folder) / "analyst.duckdb"))
+        analyst = create_analyst(
+            FixtureSource(), Path(folder) / "analyst.duckdb", llm, tracer, clock=clock
+        )
         try:
-            analyst = Analyst(
-                llm,
-                connection,
-                tables,
-                tracer=tracer,
-                clock=(lambda: today) if today else datetime.now,
-            )
             result = analyst.ask(args.question)
         finally:
-            connection.close()
+            analyst.connection.close()
 
     print(f"[{result.action}] {result.answer}\n")
     if result.assumptions:

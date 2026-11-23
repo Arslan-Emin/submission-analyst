@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from pathlib import Path
 
 from analyst.sources.base import SourceData
@@ -21,4 +22,7 @@ class FixtureSource:
             form_title=str(payload["form"]["title"]),
             questions=payload["questions"],
             submissions=payload["submissions"],
+            as_of=datetime.fromisoformat(as_of)
+            if (as_of := payload["form"].get("as_of"))
+            else None,
         )

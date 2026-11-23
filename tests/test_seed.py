@@ -54,3 +54,10 @@ def test_october_has_a_performance_spike() -> None:
     ]
     top_complaint = Counter(t for t in october if t != seed.NO_ISSUE).most_common(1)[0][0]
     assert top_complaint == "Performance"
+
+
+def test_fixture_has_a_snapshot_date_for_relative_questions() -> None:
+    data = FixtureSource().load()
+
+    assert data.as_of == seed.AS_OF
+    assert max(s["created_at"] for s in data.submissions) < data.as_of.isoformat(sep=" ")
