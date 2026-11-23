@@ -11,8 +11,10 @@ Output:
   cell without arrays, and arrays are where text-to-SQL models make most mistakes.
 
 Answer shapes handled (Jotform API): plain strings, compound dicts such as
-full name {"first", "last"} and lists for checkboxes. Shapes are verified against
-the fixture; live API answers are checked when the REST source is added.
+full name {"first", "last"} and lists for checkboxes; unanswered questions have
+no "answer" key. Verified against live submissions read back from a real form
+(GET /submission/{id} and GET /form/{id}/submissions): the same 20 synthetic
+submissions normalize to the same tables as the fixture.
 """
 
 from __future__ import annotations

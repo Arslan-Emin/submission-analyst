@@ -161,3 +161,17 @@ def test_rest_source_loads_form_questions_and_all_submissions() -> None:
     assert [s["id"] for s in data.submissions] == ["1"]
     assert data.as_of is None  # live data: today is the real date
     assert paths.count("/v1/form/123/submissions") == 2
+
+
+def test_edit_question_posts_question_properties() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return ok({"qid": "7", "name": "npsScore"})
+
+    make_client(handler).edit_question("123", "7", {"name": "npsScore"})
+
+    request = seen[0]
+    assert (request.method, request.url.path) == ("POST", "/v1/form/123/question/7")
+    assert dict(parse_qsl(request.content.decode())) == {"question[name]": "npsScore"}

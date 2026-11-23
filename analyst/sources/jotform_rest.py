@@ -6,6 +6,11 @@ Verified against Jotform's official Python client (github.com/jotform/jotform-ap
 - endpoints live under `/v1`, the API key goes in the `APIKEY` header,
 - responses wrap the payload in a `content` key,
 - GET /form/{id}/submissions takes `offset`, `limit`, `filter` (JSON) and `orderby`.
+
+Verified on a live form: submissions are POSTed as submission[<qid>]=value,
+submission[<qid>][first|last] for full names and submission[<qid>][0], [1], ...
+for multi-select answers, which read back as lists. Question properties are
+changed with POST /form/{id}/question/{qid} and question[<property>]=value.
 """
 
 from __future__ import annotations
@@ -122,6 +127,13 @@ class JotformClient:
         while page := self.get_submissions(form_id, limit=page_size, offset=len(submissions)):
             submissions.extend(page)
         return submissions
+
+    def edit_question(self, form_id: str, qid: str, properties: dict[str, str]) -> dict[str, Any]:
+        """POST /form/{id}/question/{qid} with question[<property>]=value (as the official
+        client's edit_form_question). Changes the form, not its submissions."""
+        data = {f"question[{key}]": value for key, value in properties.items()}
+        content = self._request("POST", f"/form/{form_id}/question/{qid}", data=data)
+        return content if isinstance(content, dict) else {}
 
     def create_submission(self, form_id: str, data: dict[str, str]) -> dict[str, Any]:
         content = self._request("POST", f"/form/{form_id}/submissions", data=data)
