@@ -14,6 +14,8 @@ from analyst.database import build_database, open_read_only
 from analyst.llm_client import LLMClient, create_llm_client
 from analyst.normalize import normalize
 from analyst.sources.base import DataSource
+from analyst.sources.fixture import FixtureSource
+from analyst.sources.jotform_rest import JotformClient, JotformRESTSource
 from analyst.tracing import HttpExporter, JsonlFileSink, TracedLLMClient, TraceListener, Tracer
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -70,4 +72,25 @@ def create_analyst(
     if clock is None:
         as_of = data.as_of
         clock = (lambda: as_of) if as_of else datetime.now
-    return Analyst(llm, connection, tables, tracer=tracer, clock=clock)
+    return Analyst(
+        llm,
+        connection,
+        tables,
+        tracer=tracer,
+        clock=clock,
+        form_title=data.form_title,
+        snapshot=data.as_of is not None,
+    )
+
+
+def create_source(settings: Settings | None = None) -> DataSource:
+    """The configured data source. Fails fast if Jotform is chosen but not configured."""
+    settings = settings or get_settings()
+    if settings.data_source == "fixture":
+        return FixtureSource()
+    if settings.data_source == "jotform":
+        if not settings.jotform_configured:
+            raise RuntimeError("DATA_SOURCE=jotform needs JOTFORM_API_KEY and JOTFORM_FORM_ID.")
+        client = JotformClient(settings.jotform_api_key, settings.jotform_base_url)
+        return JotformRESTSource(client, settings.jotform_form_id)
+    raise RuntimeError(f"Unknown DATA_SOURCE {settings.data_source!r}. Use 'fixture' or 'jotform'.")

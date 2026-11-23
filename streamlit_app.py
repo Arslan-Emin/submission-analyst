@@ -14,7 +14,6 @@ from analyst import factory
 from analyst.agent import Analyst, AnalystResult
 from analyst.charts import build_chart, result_frame
 from analyst.config import get_settings
-from analyst.sources.fixture import FixtureSource
 
 EXAMPLE_QUESTIONS = [
     "Which complaint topic was most common last month?",
@@ -33,7 +32,8 @@ def get_analyst() -> Analyst:
     tracer = factory.create_tracer(settings)
     llm = factory.create_traced_llm(settings, tracer)
     folder = Path(tempfile.mkdtemp(prefix="submission-analyst-"))
-    return factory.create_analyst(FixtureSource(), folder / "analyst.duckdb", llm, tracer)
+    source = factory.create_source(settings)
+    return factory.create_analyst(source, folder / "analyst.duckdb", llm, tracer)
 
 
 def _markdown_text(text: str) -> str:
@@ -90,8 +90,12 @@ def main() -> None:
     with st.sidebar:
         st.subheader("Data")
         st.markdown(
-            "Synthetic *Customer Satisfaction Survey*, 400 submissions "
-            f"(Aug–Nov 2026). Relative dates use **{analyst.today():%Y-%m-%d}** as today."
+            f"*{analyst.form_title}*, {analyst.submission_count} submissions. "
+            + (
+                f"Synthetic snapshot: relative dates use **{analyst.today():%Y-%m-%d}** as today."
+                if analyst.snapshot
+                else "Live Jotform data: relative dates use today's date."
+            )
         )
         with st.expander("Schema the model sees"):
             st.code(analyst.schema_context, language=None)

@@ -15,6 +15,8 @@ from typing import Any
 
 import httpx
 
+from analyst.sources.base import SourceData
+
 API_VERSION_PREFIX = "/v1"
 
 
@@ -64,6 +66,12 @@ class JotformClient:
             raise JotformError(f"Jotform API error (HTTP {response.status_code}): {message}")
         return payload.get("content")
 
+    def get_form(self, form_id: str) -> dict[str, Any]:
+        content = self._request("GET", f"/form/{form_id}")
+        if not isinstance(content, dict):
+            raise JotformError("Unexpected form format from Jotform.")
+        return content
+
     def get_questions(self, form_id: str) -> dict[str, dict[str, Any]]:
         content = self._request("GET", f"/form/{form_id}/questions")
         if not isinstance(content, dict):
@@ -112,3 +120,23 @@ class JotformClient:
     def create_submission(self, form_id: str, data: dict[str, str]) -> dict[str, Any]:
         content = self._request("POST", f"/form/{form_id}/submissions", data=data)
         return content if isinstance(content, dict) else {}
+
+
+class JotformRESTSource:
+    """Live data from a Jotform form through the REST API (read-only calls only).
+
+    There is no snapshot date: "today" for relative questions is the real date.
+    """
+
+    def __init__(self, client: JotformClient, form_id: str) -> None:
+        self.client = client
+        self.form_id = form_id
+
+    def load(self) -> SourceData:
+        form = self.client.get_form(self.form_id)
+        return SourceData(
+            form_id=self.form_id,
+            form_title=str(form.get("title") or f"Form {self.form_id}"),
+            questions=self.client.get_questions(self.form_id),
+            submissions=self.client.get_all_submissions(self.form_id),
+        )

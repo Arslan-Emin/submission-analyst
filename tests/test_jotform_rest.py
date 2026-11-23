@@ -9,7 +9,7 @@ from urllib.parse import parse_qsl
 import httpx
 import pytest
 
-from analyst.sources.jotform_rest import JotformClient, JotformError
+from analyst.sources.jotform_rest import JotformClient, JotformError, JotformRESTSource
 
 QUESTIONS = {"3": {"qid": "3", "type": "control_textbox", "name": "comment", "text": "Comment"}}
 
@@ -140,3 +140,24 @@ def test_get_all_submissions_pages_until_an_empty_page() -> None:
 
     assert rows == data
     assert offsets == [0, 2, 4, 5]
+
+
+def test_rest_source_loads_form_questions_and_all_submissions() -> None:
+    paths: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        paths.append(request.url.path)
+        if request.url.path == "/v1/form/123":
+            return ok({"id": "123", "title": "Survey"})
+        if request.url.path == "/v1/form/123/questions":
+            return ok(QUESTIONS)
+        offset = int(request.url.params.get("offset", "0"))
+        return ok([{"id": "1", "answers": {}}] if offset == 0 else [])
+
+    data = JotformRESTSource(make_client(handler), "123").load()
+
+    assert (data.form_id, data.form_title) == ("123", "Survey")
+    assert data.questions == QUESTIONS
+    assert [s["id"] for s in data.submissions] == ["1"]
+    assert data.as_of is None  # live data: today is the real date
+    assert paths.count("/v1/form/123/submissions") == 2

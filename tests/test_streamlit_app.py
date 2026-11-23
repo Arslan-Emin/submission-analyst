@@ -40,7 +40,10 @@ def test_page_renders_examples_and_schema(fake_llm) -> None:
     assert not at.exception
     assert at.title[0].value == "Submission Analyst"
     assert len(at.button) == 4
-    assert "2026-11-23" in at.sidebar.markdown[0].value
+    sidebar = at.sidebar.markdown[0].value
+    assert "*Customer Satisfaction Survey*, 400 submissions." in sidebar
+    assert "Synthetic snapshot" in sidebar
+    assert "2026-11-23" in sidebar
     assert fake_llm.requests == []  # nothing is sent to the LLM before a question
 
 

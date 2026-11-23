@@ -30,6 +30,8 @@ class Settings:
     jotform_api_key: str | None = None
     jotform_form_id: str | None = None
     jotform_base_url: str = DEFAULT_JOTFORM_BASE_URL
+    # Where submissions come from: "fixture" (synthetic, offline) or "jotform" (REST API).
+    data_source: str = "fixture"
     trace_enabled: bool = True
     trace_dir: str = DEFAULT_TRACE_DIR
     # Off by default: questions, SQL results and comments can contain personal data.
@@ -55,6 +57,7 @@ def get_settings() -> Settings:
         jotform_api_key=os.getenv("JOTFORM_API_KEY") or None,
         jotform_form_id=os.getenv("JOTFORM_FORM_ID") or None,
         jotform_base_url=os.getenv("JOTFORM_BASE_URL") or DEFAULT_JOTFORM_BASE_URL,
+        data_source=(os.getenv("DATA_SOURCE") or "fixture").lower(),
         trace_enabled=_env_flag("TRACE_ENABLED", True),
         trace_dir=os.getenv("TRACE_DIR") or DEFAULT_TRACE_DIR,
         trace_include_content=_env_flag("TRACE_INCLUDE_CONTENT", False),

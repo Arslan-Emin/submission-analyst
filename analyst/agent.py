@@ -155,8 +155,14 @@ class Analyst:
         max_corrections: int = DEFAULT_MAX_CORRECTIONS,
         max_rows: int = DEFAULT_MAX_ROWS,
         timeout_s: float = DEFAULT_TIMEOUT_S,
+        form_title: str = "",
+        snapshot: bool = False,
     ) -> None:
         self.llm = llm
+        self.form_title = form_title
+        # True when "today" is the data's snapshot date rather than the real date.
+        self.snapshot = snapshot
+        self.submission_count = len(tables[0].rows) if tables else 0
         self.connection = connection
         self.table_names = [table.name for table in tables]
         self.schema_context = build_schema_context(connection, tables)

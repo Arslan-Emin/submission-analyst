@@ -13,8 +13,7 @@ from datetime import datetime
 from pathlib import Path
 
 from analyst.config import get_settings
-from analyst.factory import create_analyst, create_traced_llm, create_tracer
-from analyst.sources.fixture import FixtureSource
+from analyst.factory import create_analyst, create_source, create_traced_llm, create_tracer
 
 MAX_PRINTED_ROWS = 20
 
@@ -33,7 +32,7 @@ def main(argv: list[str] | None = None) -> int:
     clock = (lambda: today) if today else None
     with tempfile.TemporaryDirectory() as folder:
         analyst = create_analyst(
-            FixtureSource(), Path(folder) / "analyst.duckdb", llm, tracer, clock=clock
+            create_source(settings), Path(folder) / "analyst.duckdb", llm, tracer, clock=clock
         )
         try:
             result = analyst.ask(args.question)
