@@ -1,0 +1,38 @@
+# Personal project notes (not part of the public repo)
+CLAUDE.md
+
+# Secrets
+.env
+*.token
+.mcp_tokens/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+
+# Runtime logs / traces
+logs/
+
+# Local databases
+*.duckdb
+*.duckdb.wal
+evalplat.db
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Local editor/agent tooling
+.claude/
+
+# Streamlit secrets (deploy)
+.streamlit/secrets.toml
