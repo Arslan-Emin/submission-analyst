@@ -3,9 +3,9 @@
 Every submission counts against the account's monthly quota (100 on the free plan,
 and deleting does not give it back), so nothing is sent without --send:
 
-    python scripts/upload_sample.py --count 20                # show what would be sent
-    python scripts/upload_sample.py --count 1 --send          # send one and read it back
-    python scripts/upload_sample.py --count 20 --skip 1 --send
+    python -m scripts.upload_sample --count 20                # show what would be sent
+    python -m scripts.upload_sample --count 1 --send          # send one and read it back
+    python -m scripts.upload_sample --count 20 --skip 1 --send
 
 Questions are matched by their unique name (fixture `satisfactionScore` ->
 the live form's question with the same name), so the live form's question ids
