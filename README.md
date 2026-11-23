@@ -7,6 +7,8 @@ back with a table, a chart and the SQL that produced it.
 > "Which complaint topic was most common last month?" → `Performance, 31 submissions`,
 > the query, the rows, and the cost of the question (about $0.0003).
 
+**Live demo:** https://submission-analyst.streamlit.app/ (synthetic data; 5 questions per session, small daily budget)
+
 Part of a three-project portfolio:
 1. [Conversational Form Agent](https://github.com/Arslan-Emin/conversational-form-agent) collects data.
 2. [LLM Eval & Observability Platform](https://github.com/Arslan-Emin/llm-eval-platform) measures both agents.
