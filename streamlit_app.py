@@ -62,7 +62,7 @@ def render_result(result: AnalystResult) -> None:
                 for number, attempt in enumerate(result.attempts, start=1):
                     if not attempt.ok:
                         st.caption(f"Attempt {number} failed: {attempt.error}")
-                    st.code(attempt.ran_sql or attempt.sql, language="sql")
+                    st.code(attempt.ran_sql or attempt.sql, language="sql", wrap_lines=True)
 
         cost = f"${result.cost_usd:.5f}" if result.cost_usd is not None else "cost unknown"
         tokens = result.input_tokens + result.output_tokens
